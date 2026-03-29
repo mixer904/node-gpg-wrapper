@@ -1,40 +1,115 @@
-<h1 align="center" style="text-align: center; width: fit-content; margin-left: auto; margin-right: auto;">ts-base</h1>
+# @mixer904/node-gpg-wrapper
 
-<p align="center">
-  <a href="https://github.com/bgub/ts-base/actions">CI</a>
-  ·
-  <a href="https://github.com/bgub/ts-base/releases">Releases</a>
-  ·
-  <a href="https://github.com/bgub/ts-base/issues">Issues</a>
-</p>
+A tiny TypeScript wrapper around the `gpg` CLI for decrypting files in Node.js, with progress reporting and typed results.
 
-<span align="center">
+## What it does
 
-[![npm](https://img.shields.io/npm/v/%40bgub%2Fts-base?logo=npm&label=npm)](https://www.npmjs.com/package/@bgub/ts-base)
-[![CI](https://github.com/bgub/ts-base/actions/workflows/ci.yml/badge.svg)](https://github.com/bgub/ts-base/actions)
-[![Codecov](https://codecov.io/github/bgub/ts-base/branch/main/graph/badge.svg)](https://codecov.io/github/bgub/ts-base)
-[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ff69b4)](https://github.com/sponsors/bgub)
+- Decrypts an encrypted file by streaming it into `gpg`
+- Returns plaintext in memory or writes directly to an output file
+- Reports progress (`encryptedBytesRead`, `percent`, status events)
+- Exposes structured decryption errors (`GpgDecryptionError`)
+- Ships a browser entrypoint that throws a clear "not supported" error
 
-</span>
+## Install
 
-TypeScript library starter that works out-of-the-box with Node, Deno, Bun, and the browser. Batteries included: linting, testing, bundling, size-limit, and automated releases.
+```bash
+npm i @mixer904/node-gpg-wrapper
+```
 
-## Features
+Requirements:
 
-- **Biome**: lint and format with a single tool
-- **Vitest**: fast tests with coverage and thresholds
-- **Size Limit**: keep bundles tiny, with CI checks
-- **tsdown**: ESM builds for Node and a separate browser bundle
-- **CI**: lint, typecheck, test, coverage, and size comments/badges
-- **Release Please**: automated release PRs and changelogs
-- **Commit Linting**: conventional commits enforced in CI
-- **Deno-friendly**: `.ts` source imports for direct consumption
-- **Multi-runtime**: `src/internal.ts` is runtime-agnostic; `src/index.ts` (Node) and `src/browser.ts` (browser) wire runtime-specific APIs
-- **OIDC + Provenance**: publish to npm and JSR via manual CI release
+- Node.js `>= 20`
+- `gpg` installed and available in `PATH` (or pass a custom `gpgPath`)
 
-## Usage
+## Usage (Node)
 
-Install dependencies and run scripts:
+```ts
+import { GpgWrapper } from "@mixer904/node-gpg-wrapper";
+
+const gpg = new GpgWrapper();
+
+const result = await gpg.decryptFile({
+  inputPath: "./secret.txt.gpg",
+  passphrase: process.env.GPG_PASSPHRASE,
+  onProgress: (p) => {
+    console.log(`${p.percent.toFixed(1)}%`, p.status ?? "");
+  },
+});
+
+console.log(result.plaintext?.toString("utf8"));
+console.log(result.durationMs);
+```
+
+### Decrypt to disk instead of memory
+
+```ts
+const result = await gpg.decryptFile({
+  inputPath: "./secret.txt.gpg",
+  outputPath: "./secret.txt",
+});
+
+console.log(result.outputPath); // ./secret.txt
+console.log(result.plaintext); // undefined
+```
+
+## Browser entrypoint
+
+```ts
+import { decryptFile } from "@mixer904/node-gpg-wrapper/browser";
+
+await decryptFile(); // throws BrowserNotSupportedError
+```
+
+Use the Node entrypoint for real decryption.
+
+## API
+
+### `class GpgWrapper`
+
+- `decryptFile(options: DecryptFileOptions): Promise<DecryptResult>`
+
+`GpgWrapper` also emits a `progress` event with `DecryptProgress`.
+
+### `DecryptFileOptions`
+
+- `inputPath: string` (required)
+- `outputPath?: string`
+- `passphrase?: string`
+- `gpgPath?: string` (default: `gpg`)
+- `homedir?: string`
+- `extraArgs?: string[]`
+- `onProgress?: (progress: DecryptProgress) => void`
+- `signal?: AbortSignal`
+
+### `DecryptProgress`
+
+- `encryptedBytesRead: number`
+- `encryptedTotalBytes: number`
+- `outputBytes: number`
+- `percent: number`
+- `status?: string` (parsed from `[GNUPG:] ...` status lines)
+
+### `DecryptResult`
+
+- `plaintext?: Buffer` (only when `outputPath` is not set)
+- `outputPath?: string`
+- `encryptedBytesRead: number`
+- `encryptedTotalBytes: number`
+- `outputBytes: number`
+- `durationMs: number`
+- `statusLines: string[]`
+
+### `GpgDecryptionError`
+
+Thrown when `gpg` exits with non-zero code.
+
+Properties:
+
+- `exitCode: number | null`
+- `stderr: string`
+- `statusLines: string[]`
+
+## Development
 
 ```bash
 pnpm i
@@ -43,45 +118,11 @@ pnpm test
 pnpm build
 ```
 
-Node usage:
+Scripts:
 
-```ts
-import { add, greet, getSecureRandomId } from "@bgub/ts-base";
-
-console.log(add(2, 3));
-console.log(greet("Ada"));
-console.log(getSecureRandomId());
-```
-
-Browser usage (bundled or via import maps):
-
-```ts
-import { add, greet, getSecureRandomId } from "@bgub/ts-base/browser";
-
-add(1, 2);
-greet("Linus");
-getSecureRandomId();
-```
-
-Deno usage (import from `src` if desired):
-
-```ts
-import { add, greet } from "https://jsr.io/@bgub/ts-base/<version>/src/index.ts";
-```
-
-## Project Structure
-
-- `src/internal.ts`: core logic, no Node/browser APIs
-- `src/index.ts`: Node adapter (e.g., `crypto.randomBytes`)
-- `src/browser.ts`: browser adapter (e.g., `crypto.getRandomValues`)
-- `tsdown.config.ts`: builds Node entry and browser `core` bundle
-- `vitest.config.ts`: coverage config and thresholds
-
-## Releasing
-
-- Merge the automated Release PR created by Release Please
-- Manually run the "Release" workflow to publish to npm and JSR with provenance
+- `pnpm dev` - watch build
+- `pnpm size` - size-limit check for browser bundle
 
 ## License
 
-MIT © [bgub](https://github.com/bgub)
+MIT
