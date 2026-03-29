@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { EventEmitter } from "node:events";
