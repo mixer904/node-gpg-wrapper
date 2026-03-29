@@ -118,7 +118,7 @@ export class GpgWrapper extends EventEmitter {
       this.emit("progress", progress);
     };
 
-    source.on("data", (chunk: Buffer) => {
+    source.on("data", (chunk: string | Buffer<ArrayBufferLike>) => {
       encryptedBytesRead += chunk.length;
       emitProgress();
     });
