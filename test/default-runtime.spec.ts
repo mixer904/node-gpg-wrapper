@@ -40,4 +40,50 @@ describe("GpgWrapper default runtime", () => {
     expect(mockCreateReadStream).toHaveBeenCalledWith("in.gpg");
     expect(mockStat).toHaveBeenCalledWith("in.gpg");
   });
+
+  it("creates and removes a temp homedir when privateKey is provided without homedir", async () => {
+    const importChild = new FakeChildProcess();
+    const decryptChild = new FakeChildProcess();
+    const mockSpawn = vi
+      .fn()
+      .mockReturnValueOnce(importChild)
+      .mockReturnValueOnce(decryptChild);
+    const mockCreateReadStream = vi
+      .fn()
+      .mockReturnValue(Readable.from([Buffer.from("enc")]));
+    const mockStat = vi.fn().mockResolvedValue({ size: 3 });
+    const mockMkdtemp = vi.fn().mockResolvedValue("/tmp/node-gpg-wrapper-123");
+    const mockRm = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("node:child_process", () => ({ spawn: mockSpawn }));
+    vi.doMock("node:fs", () => ({ createReadStream: mockCreateReadStream }));
+    vi.doMock("node:fs/promises", () => ({
+      stat: mockStat,
+      mkdtemp: mockMkdtemp,
+      rm: mockRm,
+    }));
+
+    const { GpgWrapper } = await import("../src/gpg-wrapper");
+    const wrapper = new GpgWrapper();
+    const donePromise = wrapper.decryptFile({
+      inputPath: "in.gpg",
+      privateKey: "/keys/private.asc",
+    });
+
+    await once(importChild.stdin, "finish");
+    importChild.emit("close", 0);
+    await once(decryptChild.stdin, "finish");
+    decryptChild.emit("close", 0);
+    await donePromise;
+
+    expect(mockMkdtemp).toHaveBeenCalledOnce();
+    expect(mockRm).toHaveBeenCalledWith("/tmp/node-gpg-wrapper-123", {
+      recursive: true,
+      force: true,
+    });
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
+    const [, importArgs] = mockSpawn.mock.calls[0] as [string, string[]];
+    expect(importArgs).toContain("--homedir");
+    expect(importArgs).toContain("/tmp/node-gpg-wrapper-123");
+  });
 });

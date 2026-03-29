@@ -31,6 +31,8 @@ const gpg = new GpgWrapper();
 const result = await gpg.decryptFile({
   inputPath: "./secret.txt.gpg",
   passphrase: process.env.GPG_PASSPHRASE,
+  // Either key text or a path to an armored private key file.
+  privateKey: process.env.GPG_PRIVATE_KEY_PATH ?? process.env.GPG_PRIVATE_KEY,
   onProgress: (p) => {
     console.log(`${p.percent.toFixed(1)}%`, p.status ?? "");
   },
@@ -75,6 +77,7 @@ Use the Node entrypoint for real decryption.
 - `inputPath: string` (required)
 - `outputPath?: string`
 - `passphrase?: string`
+- `privateKey?: string` (ASCII-armored key text or path to key file)
 - `gpgPath?: string` (default: `gpg`)
 - `homedir?: string`
 - `extraArgs?: string[]`

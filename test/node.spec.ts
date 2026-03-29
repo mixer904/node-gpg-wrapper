@@ -18,7 +18,9 @@ describe("GpgWrapper decryptFile", () => {
       spawn,
       createReadStream: vi
         .fn()
-        .mockReturnValue(Readable.from([Buffer.from("enc1"), Buffer.from("enc2")])),
+        .mockReturnValue(
+          Readable.from([Buffer.from("enc1"), Buffer.from("enc2")]),
+        ),
       stat: vi.fn().mockResolvedValue({ size: 8 }),
     });
 
@@ -57,7 +59,9 @@ describe("GpgWrapper decryptFile", () => {
     const spawn = vi.fn().mockReturnValue(child);
     const wrapper = new GpgWrapper({
       spawn,
-      createReadStream: vi.fn().mockReturnValue(Readable.from([Buffer.from("enc")])),
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
       stat: vi.fn().mockResolvedValue({ size: 3 }),
     });
 
@@ -81,7 +85,9 @@ describe("GpgWrapper decryptFile", () => {
     const child = new FakeChildProcess();
     const wrapper = new GpgWrapper({
       spawn: vi.fn().mockReturnValue(child),
-      createReadStream: vi.fn().mockReturnValue(Readable.from([Buffer.from("enc")])),
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
       stat: vi.fn().mockResolvedValue({ size: 3 }),
     });
 
@@ -104,7 +110,9 @@ describe("GpgWrapper decryptFile", () => {
     const spawn = vi.fn().mockReturnValue(child);
     const wrapper = new GpgWrapper({
       spawn,
-      createReadStream: vi.fn().mockReturnValue(Readable.from([Buffer.from("enc")])),
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
       stat: vi.fn().mockResolvedValue({ size: 3 }),
     });
     const controller = new AbortController();
@@ -133,6 +141,163 @@ describe("GpgWrapper decryptFile", () => {
     expect(spawnOptions.signal).toBe(controller.signal);
   });
 
+  it("imports a private key from inline content before decrypting", async () => {
+    const importChild = new FakeChildProcess();
+    const decryptChild = new FakeChildProcess();
+    const spawn = vi
+      .fn()
+      .mockReturnValueOnce(importChild)
+      .mockReturnValueOnce(decryptChild);
+    const wrapper = new GpgWrapper({
+      spawn,
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
+      stat: vi.fn().mockResolvedValue({ size: 3 }),
+    });
+    let importedKey = "";
+    importChild.stdin.on("data", (chunk: Buffer) => {
+      importedKey += chunk.toString("utf8");
+    });
+
+    const donePromise = wrapper.decryptFile({
+      inputPath: "in.gpg",
+      homedir: "/tmp/gnupg",
+      privateKey: "-----BEGIN PGP PRIVATE KEY BLOCK-----\nabc\n-----END-----",
+    });
+
+    await once(importChild.stdin, "finish");
+    importChild.emit("close", 0);
+    await once(decryptChild.stdin, "finish");
+    decryptChild.emit("close", 0);
+    await donePromise;
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+    const [, importArgs] = spawn.mock.calls[0] as [string, string[]];
+    expect(importArgs).toContain("--import");
+    expect(importArgs).toContain("--homedir");
+    expect(importArgs).toContain("/tmp/gnupg");
+    expect(importedKey).toContain("BEGIN PGP PRIVATE KEY BLOCK");
+
+    const [, decryptArgs] = spawn.mock.calls[1] as [string, string[]];
+    expect(decryptArgs).toContain("--decrypt");
+    expect(decryptArgs).toContain("--homedir");
+    expect(decryptArgs).toContain("/tmp/gnupg");
+  });
+
+  it("imports a private key from a file path before decrypting", async () => {
+    const importChild = new FakeChildProcess();
+    const decryptChild = new FakeChildProcess();
+    const spawn = vi
+      .fn()
+      .mockReturnValueOnce(importChild)
+      .mockReturnValueOnce(decryptChild);
+    const wrapper = new GpgWrapper({
+      spawn,
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
+      stat: vi.fn().mockResolvedValue({ size: 3 }),
+    });
+
+    const donePromise = wrapper.decryptFile({
+      inputPath: "in.gpg",
+      homedir: "/tmp/gnupg",
+      privateKey: "/keys/private.asc",
+    });
+
+    await once(importChild.stdin, "finish");
+    importChild.emit("close", 0);
+    await once(decryptChild.stdin, "finish");
+    decryptChild.emit("close", 0);
+    await donePromise;
+
+    const [, importArgs] = spawn.mock.calls[0] as [string, string[]];
+    expect(importArgs).toContain("--import");
+    expect(importArgs).toContain("/keys/private.asc");
+  });
+
+  it("imports key content when key has line breaks but no armor header", async () => {
+    const importChild = new FakeChildProcess();
+    const decryptChild = new FakeChildProcess();
+    const spawn = vi
+      .fn()
+      .mockReturnValueOnce(importChild)
+      .mockReturnValueOnce(decryptChild);
+    const wrapper = new GpgWrapper({
+      spawn,
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
+      stat: vi.fn().mockResolvedValue({ size: 3 }),
+    });
+    let importedKey = "";
+    importChild.stdin.on("data", (chunk: Buffer) => {
+      importedKey += chunk.toString("utf8");
+    });
+
+    const donePromise = wrapper.decryptFile({
+      inputPath: "in.gpg",
+      homedir: "/tmp/gnupg",
+      privateKey: "line1\nline2",
+    });
+
+    await once(importChild.stdin, "finish");
+    importChild.emit("close", 0);
+    await once(decryptChild.stdin, "finish");
+    decryptChild.emit("close", 0);
+    await donePromise;
+
+    expect(importedKey).toBe("line1\nline2");
+  });
+
+  it("throws GpgDecryptionError when private key import exits non-zero", async () => {
+    const importChild = new FakeChildProcess();
+    const spawn = vi.fn().mockReturnValue(importChild);
+    const wrapper = new GpgWrapper({
+      spawn,
+      createReadStream: vi.fn(),
+      stat: vi.fn(),
+    });
+
+    const donePromise = wrapper.decryptFile({
+      inputPath: "in.gpg",
+      homedir: "/tmp/gnupg",
+      privateKey: "/keys/private.asc",
+    });
+
+    await once(importChild.stdin, "finish");
+    importChild.stderr.write("[GNUPG:] IMPORT_RES 0 0 0 0 0");
+    importChild.emit("close", 2);
+
+    await expect(donePromise).rejects.toBeInstanceOf(GpgDecryptionError);
+    await expect(donePromise).rejects.toMatchObject({
+      exitCode: 2,
+    });
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects when private key import process emits an error", async () => {
+    const importChild = new FakeChildProcess();
+    const wrapper = new GpgWrapper({
+      spawn: vi.fn().mockReturnValue(importChild),
+      createReadStream: vi.fn(),
+      stat: vi.fn(),
+    });
+
+    const donePromise = wrapper.decryptFile({
+      inputPath: "in.gpg",
+      homedir: "/tmp/gnupg",
+      privateKey: "/keys/private.asc",
+    });
+
+    await once(importChild.stdin, "finish");
+    const expectedError = new Error("import spawn failed");
+    importChild.emit("error", expectedError);
+
+    await expect(donePromise).rejects.toBe(expectedError);
+  });
+
   it("rejects when child process emits an error", async () => {
     const child = new FakeChildProcess();
     const source = new PassThrough();
@@ -152,5 +317,4 @@ describe("GpgWrapper decryptFile", () => {
     await expect(donePromise).rejects.toBe(expectedError);
     expect(sourceDestroy).toHaveBeenCalled();
   });
-
 });
