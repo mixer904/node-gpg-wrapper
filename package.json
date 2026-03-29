@@ -1,0 +1,61 @@
+{
+  "name": "@mixer904/node-gpg-wrapper",
+  "version": "0.0.0",
+  "description": "Node.js GPG Wrapper",
+  "keywords": [
+    "gpg",
+    "openpgp",
+    "typescript"
+  ],
+  "homepage": "https://github.com/mixer904/node-gpg-wrapper",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browser.js",
+      "types": "./dist/browser.d.ts"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "browser": "./dist/browser.js",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint": "biome check --error-on-warnings",
+    "format": "biome format --write",
+    "test": "vitest run --coverage",
+    "size": "size-limit"
+  },
+  "author": "mixer904",
+  "repository": "github:mixer904/node-gpg-wrapper",
+  "bugs": {
+    "url": "https://github.com/mixer904/node-gpg-wrapper/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "size-limit": [
+    {
+      "path": "dist/browser.js",
+      "limit": "3.5 KB"
+    }
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "2.2.3",
+    "@size-limit/preset-small-lib": "^8.2.4",
+    "@types/node": "^22.18.1",
+    "@vitest/coverage-istanbul": "3.2.4",
+    "size-limit": "^8.2.4",
+    "tsdown": "^0.15.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
