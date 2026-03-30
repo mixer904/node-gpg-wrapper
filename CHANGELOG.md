@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/mixer904/node-gpg-wrapper/compare/node-gpg-wrapper-v0.1.3...node-gpg-wrapper-v0.1.4) (2026-03-30)
+
+
+### Miscellaneous Chores
+
+* release 0.1.4 ([6e59c8e](https://github.com/mixer904/node-gpg-wrapper/commit/6e59c8efe39cd348a3ce00296a10c796170dce9a))
+
 ## [0.1.3](https://github.com/mixer904/node-gpg-wrapper/compare/node-gpg-wrapper-v0.1.2...node-gpg-wrapper-v0.1.3) (2026-03-30)
 
 
