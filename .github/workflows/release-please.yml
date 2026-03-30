@@ -60,6 +60,3 @@ jobs:
           else
             npm publish --access public --provenance
           fi
-
-      - name: publish to JSR
-        run: pnpm dlx jsr publish
