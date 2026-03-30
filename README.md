@@ -1,4 +1,4 @@
-# @mixer904/node-gpg-wrapper
+# node-gpg-wrapper
 
 A tiny TypeScript wrapper around the `gpg` CLI for decrypting files in Node.js, with progress reporting and typed results.
 
@@ -13,7 +13,7 @@ A tiny TypeScript wrapper around the `gpg` CLI for decrypting files in Node.js, 
 ## Install
 
 ```bash
-npm i @mixer904/node-gpg-wrapper
+npm i node-gpg-wrapper
 ```
 
 Requirements:
@@ -24,7 +24,7 @@ Requirements:
 ## Usage (Node)
 
 ```ts
-import { GpgWrapper } from "@mixer904/node-gpg-wrapper";
+import { GpgWrapper } from "node-gpg-wrapper";
 
 const gpg = new GpgWrapper();
 
@@ -57,7 +57,7 @@ console.log(result.plaintext); // undefined
 ## Browser entrypoint
 
 ```ts
-import { decryptFile } from "@mixer904/node-gpg-wrapper/browser";
+import { decryptFile } from "node-gpg-wrapper/browser";
 
 await decryptFile(); // throws BrowserNotSupportedError
 ```
