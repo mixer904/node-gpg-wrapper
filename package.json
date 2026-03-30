@@ -1,6 +1,6 @@
 {
   "name": "@mixer904/node-gpg-wrapper",
-  "version": "0.0.0",
+  "version": "0.1.1",
   "description": "Node.js GPG Wrapper",
   "keywords": [
     "gpg",
