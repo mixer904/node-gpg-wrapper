@@ -1,6 +1,6 @@
 import {
-  spawnSync,
   type SpawnSyncOptionsWithStringEncoding,
+  spawnSync,
 } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
