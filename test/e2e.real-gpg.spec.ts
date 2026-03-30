@@ -222,7 +222,14 @@ async function createAsymmetricKeypair(
     ].join("\n"),
     "utf8",
   );
-  runGpg(["--batch", "--yes", "--homedir", homedir, "--generate-key", paramsPath]);
+  runGpg([
+    "--batch",
+    "--yes",
+    "--homedir",
+    homedir,
+    "--generate-key",
+    paramsPath,
+  ]);
 }
 
 function runGpg(
