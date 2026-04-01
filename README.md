@@ -112,6 +112,14 @@ Properties:
 - `stderr: string`
 - `statusLines: string[]`
 
+The error message now includes common root-cause hints (for example missing private key, missing/wrong passphrase, or invalid encrypted input) based on GPG status output and stderr.
+
+Example:
+
+```txt
+gpg decrypt failed (exit code 2). No matching private key was found for this ciphertext. Hint: Provide the correct private key (and homedir) before decrypting. stderr: gpg: decryption failed: No secret key
+```
+
 ## Development
 
 ```bash

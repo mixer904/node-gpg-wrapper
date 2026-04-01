@@ -96,12 +96,18 @@ describe("GpgWrapper decryptFile", () => {
     });
 
     await once(child.stdin, "finish");
-    child.stderr.write("decryption failed");
+    child.stderr.write("[GNUPG:] NO_SECKEY 1234567890ABCDEF\n");
+    child.stderr.write("gpg: decryption failed: No secret key\n");
     child.emit("close", 2);
 
     await expect(donePromise).rejects.toBeInstanceOf(GpgDecryptionError);
     await expect(donePromise).rejects.toMatchObject({
       exitCode: 2,
+    });
+    await expect(donePromise).rejects.toMatchObject({
+      message: expect.stringContaining(
+        "No matching private key was found for this ciphertext",
+      ),
     });
   });
 
@@ -267,12 +273,15 @@ describe("GpgWrapper decryptFile", () => {
     });
 
     await once(importChild.stdin, "finish");
-    importChild.stderr.write("[GNUPG:] IMPORT_RES 0 0 0 0 0");
+    importChild.stderr.write("gpg: key import failed: bad passphrase\n");
     importChild.emit("close", 2);
 
     await expect(donePromise).rejects.toBeInstanceOf(GpgDecryptionError);
     await expect(donePromise).rejects.toMatchObject({
       exitCode: 2,
+    });
+    await expect(donePromise).rejects.toMatchObject({
+      message: expect.stringContaining("The provided passphrase is incorrect"),
     });
     expect(spawn).toHaveBeenCalledTimes(1);
   });
@@ -316,5 +325,115 @@ describe("GpgWrapper decryptFile", () => {
 
     await expect(donePromise).rejects.toBe(expectedError);
     expect(sourceDestroy).toHaveBeenCalled();
+  });
+
+  it("includes a missing passphrase hint in the error message", async () => {
+    const child = new FakeChildProcess();
+    const wrapper = new GpgWrapper({
+      spawn: vi.fn().mockReturnValue(child),
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
+      stat: vi.fn().mockResolvedValue({ size: 3 }),
+    });
+
+    const donePromise = wrapper.decryptFile({ inputPath: "in.gpg" });
+
+    await once(child.stdin, "finish");
+    child.stderr.write("[GNUPG:] NEED_PASSPHRASE\n");
+    child.stderr.write("gpg: Inappropriate ioctl for device\n");
+    child.emit("close", 2);
+
+    await expect(donePromise).rejects.toMatchObject({
+      message: expect.stringContaining(
+        "A passphrase is required but none was provided",
+      ),
+    });
+  });
+
+  it("includes an invalid input hint in the error message", async () => {
+    const child = new FakeChildProcess();
+    const wrapper = new GpgWrapper({
+      spawn: vi.fn().mockReturnValue(child),
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
+      stat: vi.fn().mockResolvedValue({ size: 3 }),
+    });
+
+    const donePromise = wrapper.decryptFile({ inputPath: "in.gpg" });
+
+    await once(child.stdin, "finish");
+    child.stderr.write("[GNUPG:] NODATA 1\n");
+    child.stderr.write("gpg: no valid OpenPGP data found.\n");
+    child.emit("close", 2);
+
+    await expect(donePromise).rejects.toMatchObject({
+      message: expect.stringContaining("Input is not valid OpenPGP encrypted data"),
+    });
+  });
+
+  it("includes stderr details in generic gpg errors", async () => {
+    const child = new FakeChildProcess();
+    const wrapper = new GpgWrapper({
+      spawn: vi.fn().mockReturnValue(child),
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
+      stat: vi.fn().mockResolvedValue({ size: 3 }),
+    });
+
+    const donePromise = wrapper.decryptFile({ inputPath: "in.gpg" });
+
+    await once(child.stdin, "finish");
+    child.stderr.write("gpg: unexpected failure detail\n");
+    child.emit("close", 2);
+
+    await expect(donePromise).rejects.toMatchObject({
+      message: expect.stringContaining("stderr: gpg: unexpected failure detail"),
+    });
+  });
+
+  it("includes no-secret-key hint when only stderr contains the cause", async () => {
+    const child = new FakeChildProcess();
+    const wrapper = new GpgWrapper({
+      spawn: vi.fn().mockReturnValue(child),
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
+      stat: vi.fn().mockResolvedValue({ size: 3 }),
+    });
+
+    const donePromise = wrapper.decryptFile({ inputPath: "in.gpg" });
+
+    await once(child.stdin, "finish");
+    child.stderr.write("gpg: decryption failed: No secret key\n");
+    child.emit("close", 2);
+
+    await expect(donePromise).rejects.toMatchObject({
+      message: expect.stringContaining(
+        "No secret key is available to decrypt this message",
+      ),
+    });
+  });
+
+  it("keeps error message usable when gpg exits without code and stderr", async () => {
+    const child = new FakeChildProcess();
+    const wrapper = new GpgWrapper({
+      spawn: vi.fn().mockReturnValue(child),
+      createReadStream: vi
+        .fn()
+        .mockReturnValue(Readable.from([Buffer.from("enc")])),
+      stat: vi.fn().mockResolvedValue({ size: 3 }),
+    });
+
+    const donePromise = wrapper.decryptFile({ inputPath: "in.gpg" });
+
+    await once(child.stdin, "finish");
+    child.emit("close", null);
+
+    await expect(donePromise).rejects.toMatchObject({
+      message: expect.stringContaining("exit code null"),
+    });
   });
 });

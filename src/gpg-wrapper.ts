@@ -55,6 +55,8 @@ export class GpgDecryptionError extends Error {
   }
 }
 
+type GpgOperation = "decrypt" | "private key import";
+
 interface SpawnedProcess extends EventEmitter {
   stdin: Writable;
   stdout: Readable;
@@ -184,7 +186,12 @@ export class GpgWrapper extends EventEmitter {
           if (exitCode !== 0) {
             reject(
               new GpgDecryptionError(
-                `gpg exited with code ${exitCode ?? "null"}`,
+                buildGpgErrorMessage({
+                  operation: "decrypt",
+                  exitCode,
+                  stderr,
+                  statusLines,
+                }),
                 exitCode,
                 stderr,
                 statusLines,
@@ -277,7 +284,12 @@ export class GpgWrapper extends EventEmitter {
         if (exitCode !== 0) {
           reject(
             new GpgDecryptionError(
-              `gpg private key import exited with code ${exitCode ?? "null"}`,
+              buildGpgErrorMessage({
+                operation: "private key import",
+                exitCode,
+                stderr,
+                statusLines,
+              }),
               exitCode,
               stderr,
               statusLines,
@@ -335,4 +347,103 @@ function parsePrivateKeyInput(
     return { type: "content", value: privateKey };
   }
   return { type: "path", value: privateKey };
+}
+
+function buildGpgErrorMessage(params: {
+  operation: GpgOperation;
+  exitCode: number | null;
+  stderr: string;
+  statusLines: string[];
+}): string {
+  const details = diagnoseGpgFailure(params.stderr, params.statusLines);
+  const parts = [
+    `gpg ${params.operation} failed (exit code ${params.exitCode ?? "null"})`,
+  ];
+  if (details.reason) {
+    parts.push(details.reason);
+  }
+  if (details.hint) {
+    parts.push(`Hint: ${details.hint}`);
+  }
+  if (details.stderrLine) {
+    parts.push(`stderr: ${details.stderrLine}`);
+  }
+  return parts.join(". ");
+}
+
+function diagnoseGpgFailure(
+  stderr: string,
+  statusLines: string[],
+): {
+  reason?: string;
+  hint?: string;
+  stderrLine?: string;
+} {
+  const normalizedStderr = stderr.toLowerCase();
+  const hasStatus = (prefix: string) =>
+    statusLines.some((line) => line.startsWith(prefix));
+  const stderrLine = getLastNonEmptyLine(stderr);
+
+  if (hasStatus("NO_SECKEY")) {
+    return {
+      reason: "No matching private key was found for this ciphertext",
+      hint: "Provide the correct private key (and homedir) before decrypting",
+      stderrLine,
+    };
+  }
+
+  if (
+    hasStatus("BAD_PASSPHRASE") ||
+    normalizedStderr.includes("bad passphrase") ||
+    normalizedStderr.includes("invalid passphrase")
+  ) {
+    return {
+      reason: "The provided passphrase is incorrect",
+      hint: "Use the passphrase for the encrypted message or the private key",
+      stderrLine,
+    };
+  }
+
+  if (
+    hasStatus("MISSING_PASSPHRASE") ||
+    hasStatus("NEED_PASSPHRASE") ||
+    normalizedStderr.includes("no passphrase") ||
+    normalizedStderr.includes("inappropriate ioctl for device")
+  ) {
+    return {
+      reason: "A passphrase is required but none was provided",
+      hint: "Pass `passphrase` and keep `--pinentry-mode loopback` enabled",
+      stderrLine,
+    };
+  }
+
+  if (
+    hasStatus("NODATA") ||
+    normalizedStderr.includes("no valid openpgp data") ||
+    normalizedStderr.includes("packet(62)")
+  ) {
+    return {
+      reason: "Input is not valid OpenPGP encrypted data",
+      hint: "Verify that `inputPath` points to the encrypted `.gpg` file",
+      stderrLine,
+    };
+  }
+
+  if (normalizedStderr.includes("no secret key")) {
+    return {
+      reason: "No secret key is available to decrypt this message",
+      hint: "Import the right private key or use the correct gpg homedir",
+      stderrLine,
+    };
+  }
+
+  return { stderrLine };
+}
+
+function getLastNonEmptyLine(input: string): string | undefined {
+  const lines = input
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return lines.at(-1);
 }
