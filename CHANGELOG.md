@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.8](https://github.com/mixer904/node-gpg-wrapper/compare/node-gpg-wrapper-v0.1.6...node-gpg-wrapper-v0.1.8) (2026-04-01)
+
+
+### Bug Fixes
+
+* pnpm run build ([4b9d6eb](https://github.com/mixer904/node-gpg-wrapper/commit/4b9d6eb6f358690b53cbb9cceefdf671f7c8bbae))
+
+
+### Miscellaneous Chores
+
+* release 0.1.7 ([7e2b864](https://github.com/mixer904/node-gpg-wrapper/commit/7e2b8648f53ce41548e89025178048f82cb388e4))
+* release 0.1.8 ([87168ba](https://github.com/mixer904/node-gpg-wrapper/commit/87168bab17f67baa4ef1621599f35ed02a3544c8))
+
 ## [0.1.6](https://github.com/mixer904/node-gpg-wrapper/compare/node-gpg-wrapper-v0.1.5...node-gpg-wrapper-v0.1.6) (2026-03-30)
 
 
