@@ -4,14 +4,14 @@ export default defineConfig([
   {
     entry: ["./src/index.ts"],
     platform: "node",
-    dts: true,
+    dts: false,
     sourcemap: true,
     format: ["esm", "cjs"],
   },
   {
     entry: ["./src/browser.ts"],
     platform: "browser",
-    dts: true,
+    dts: false,
     minify: true,
     sourcemap: true,
   },
