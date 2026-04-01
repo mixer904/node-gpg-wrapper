@@ -5,6 +5,7 @@ import {
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { generateKey } from "openpgp";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { GpgWrapper } from "../src";
@@ -109,7 +110,7 @@ describeWithGpg("GpgWrapper e2e (real gpg)", () => {
 
     await mkdir(keyHome, { recursive: true });
     await mkdir(wrapperHome, { recursive: true });
-    await createAsymmetricKeypair(keyHome, recipient);
+    const { privateKey } = await createAsymmetricKeypair(keyHome, recipient);
     await writeFile(inputPath, plaintext, "utf8");
     runGpg([
       "--batch",
@@ -125,20 +126,54 @@ describeWithGpg("GpgWrapper e2e (real gpg)", () => {
       recipient,
       inputPath,
     ]);
-    const privateKey = runGpgCapture([
+    const wrapper = new GpgWrapper();
+    const result = await wrapper.decryptFile({
+      inputPath: encryptedPath,
+      privateKey,
+      homedir: wrapperHome,
+    });
+
+    expect(result.plaintext?.toString("utf8")).toBe(plaintext);
+    expect(result.statusLines).toContain("DECRYPTION_OKAY");
+  }, 30_000);
+  it("decrypts asymmetric encrypted data with private key and passphrase", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "node-gpg-wrapper-e2e-"));
+    const keyHome = join(tempDir, "key-home");
+    const wrapperHome = join(tempDir, "wrapper-home");
+    const recipient = "e2e-asym-passphrase@example.com";
+    const keyPassphrase = "key passphrase for private key";
+    const plaintext = "asymmetric decrypt via private key and passphrase";
+    const inputPath = join(tempDir, "plaintext.txt");
+    const encryptedPath = join(tempDir, "plaintext.txt.gpg");
+
+    await mkdir(keyHome, { recursive: true });
+    await mkdir(wrapperHome, { recursive: true });
+    const { privateKey } = await createAsymmetricKeypair(
+      keyHome,
+      recipient,
+      keyPassphrase,
+    );
+    await writeFile(inputPath, plaintext, "utf8");
+    runGpg([
       "--batch",
       "--yes",
       "--homedir",
       keyHome,
-      "--armor",
-      "--export-secret-keys",
+      "--trust-model",
+      "always",
+      "--output",
+      encryptedPath,
+      "--encrypt",
+      "--recipient",
       recipient,
+      inputPath,
     ]);
 
     const wrapper = new GpgWrapper();
     const result = await wrapper.decryptFile({
       inputPath: encryptedPath,
       privateKey,
+      passphrase: keyPassphrase,
       homedir: wrapperHome,
     });
 
@@ -158,7 +193,7 @@ describeWithGpg("GpgWrapper e2e (real gpg)", () => {
 
     await mkdir(keyHome, { recursive: true });
     await mkdir(wrapperHome, { recursive: true });
-    await createAsymmetricKeypair(keyHome, recipient);
+    const { privateKey } = await createAsymmetricKeypair(keyHome, recipient);
     await writeFile(inputPath, plaintext, "utf8");
     runGpg([
       "--batch",
@@ -173,15 +208,6 @@ describeWithGpg("GpgWrapper e2e (real gpg)", () => {
       "--recipient",
       recipient,
       inputPath,
-    ]);
-    const privateKey = runGpgCapture([
-      "--batch",
-      "--yes",
-      "--homedir",
-      keyHome,
-      "--armor",
-      "--export-secret-keys",
-      recipient,
     ]);
     await writeFile(privateKeyPath, privateKey, "utf8");
 
@@ -205,31 +231,26 @@ function isGpgAvailable(): boolean {
 async function createAsymmetricKeypair(
   homedir: string,
   recipient: string,
-): Promise<void> {
-  const paramsPath = join(homedir, "keygen.batch");
-  await writeFile(
-    paramsPath,
-    [
-      "%no-protection",
-      "Key-Type: RSA",
-      "Key-Length: 2048",
-      "Subkey-Type: RSA",
-      "Subkey-Length: 2048",
-      `Name-Email: ${recipient}`,
-      "Name-Real: E2E Asymmetric",
-      "Expire-Date: 0",
-      "%commit",
-    ].join("\n"),
-    "utf8",
-  );
+  passphrase?: string,
+): Promise<{ privateKey: string }> {
+  const { publicKey, privateKey } = await generateKey({
+    type: "rsa",
+    rsaBits: 2048,
+    userIDs: [{ name: "E2E Asymmetric", email: recipient }],
+    passphrase,
+    format: "armored",
+  });
+  const publicKeyPath = join(homedir, "public.asc");
+  await writeFile(publicKeyPath, publicKey, "utf8");
   runGpg([
     "--batch",
     "--yes",
     "--homedir",
     homedir,
-    "--generate-key",
-    paramsPath,
+    "--import",
+    publicKeyPath,
   ]);
+  return { privateKey };
 }
 
 function runGpg(
@@ -239,23 +260,6 @@ function runGpg(
   const result = runGpgInternal(args, options);
   if (result.status === 0) {
     return;
-  }
-  throw new Error(
-    [
-      `Failed to execute gpg ${args.join(" ")}`,
-      `exit code: ${result.status ?? "null"}`,
-      `stderr: ${result.stderr?.trim() ?? ""}`,
-    ].join("\n"),
-  );
-}
-
-function runGpgCapture(
-  args: string[],
-  options: SpawnSyncOptionsWithStringEncoding = {},
-): string {
-  const result = runGpgInternal(args, options);
-  if (result.status === 0) {
-    return result.stdout ?? "";
   }
   throw new Error(
     [
