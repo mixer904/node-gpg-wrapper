@@ -369,7 +369,9 @@ describe("GpgWrapper decryptFile", () => {
     child.emit("close", 2);
 
     await expect(donePromise).rejects.toMatchObject({
-      message: expect.stringContaining("Input is not valid OpenPGP encrypted data"),
+      message: expect.stringContaining(
+        "Input is not valid OpenPGP encrypted data",
+      ),
     });
   });
 
@@ -390,7 +392,9 @@ describe("GpgWrapper decryptFile", () => {
     child.emit("close", 2);
 
     await expect(donePromise).rejects.toMatchObject({
-      message: expect.stringContaining("stderr: gpg: unexpected failure detail"),
+      message: expect.stringContaining(
+        "stderr: gpg: unexpected failure detail",
+      ),
     });
   });
 

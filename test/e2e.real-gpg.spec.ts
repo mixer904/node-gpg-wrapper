@@ -242,14 +242,7 @@ async function createAsymmetricKeypair(
   });
   const publicKeyPath = join(homedir, "public.asc");
   await writeFile(publicKeyPath, publicKey, "utf8");
-  runGpg([
-    "--batch",
-    "--yes",
-    "--homedir",
-    homedir,
-    "--import",
-    publicKeyPath,
-  ]);
+  runGpg(["--batch", "--yes", "--homedir", homedir, "--import", publicKeyPath]);
   return { privateKey };
 }
 
